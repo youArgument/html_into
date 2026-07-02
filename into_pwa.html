@@ -963,6 +963,7 @@
       <button class="btn btn-skill" id="btn-skill" disabled>✦ Навык</button>
       <button class="btn btn-end" id="btn-end-turn">⏭ Ход</button>
     </div>
+    <div class="action-row" id="gem-actions" style="display:none; margin-top:4px;"></div>
   </div>
 
   <div class="tab-content" id="tab-gems">
@@ -1005,37 +1006,39 @@ const ATTACK_COST = 1;
 const SKILL_COST = 1;
 
 // ── GEM DEFINITIONS ──
+// trigger: 'auto' = срабатывает автоматически, 'active' = ручное использование, 'aura' = пассивная аура
+// targetType: 'enemy' / 'ally' / 'self' / 'cell' / 'area'
 const ALL_GEMS = {
   // Red - Attack gems
-  double_strike: { id: 'double_strike', name: 'Двойной удар', emoji: '⚔️', color: 'red', desc: 'Атака наносит +1 урон', cost: '1 AP', trigger: 'onAttack', effect: (u, t) => { let extra = 1; applyDamage(t, extra); showDamageNumber(t.r, t.c, extra); log(`💎 Двойной удар! +${extra}`, 'gem'); }, cd: 0 },
-  power_attack: { id: 'power_attack', name: 'Мощная атака', emoji: '💥', color: 'red', desc: 'Атака +2 урона, КД 2', cost: '1 AP', trigger: 'onAttack', effect: (u, t) => { applyDamage(t, 2); showDamageNumber(t.r, t.c, 2); log('💎 Мощная атака! +2', 'gem'); }, cd: 2 },
-  life_steal: { id: 'life_steal', name: 'Кровавый укус', emoji: '🩸', color: 'red', desc: 'Восстанавливает 2 HP при убийстве', cost: 'Авто', trigger: 'onKill', effect: (u) => { u.hp = Math.min(u.maxHp, u.hp + 2); showDamageNumber(u.r, u.c, 2, true); log('💎 Кровавый укус! +2 HP', 'gem'); }, cd: 0 },
-  berserk: { id: 'berserk', name: 'Берсерк', emoji: '🔥', color: 'red', desc: 'При <50% HP: +2 ATK, КД 3', cost: 'Авто', trigger: 'onLowHp', effect: (u) => { u.atkBonus = (u.atkBonus || 0) + 2; log(`💎 Берсерк! ATK +2 (теперь ${u.atk + u.atkBonus})`, 'gem'); }, cd: 3 },
+  power_attack: { id: 'power_attack', name: 'Мощная атака', emoji: '💥', color: 'red', desc: 'Нанести врагу +2 урона', cost: '1 AP', trigger: 'active', targetType: 'enemy', apCost: 1, useEffect: (u, t) => { applyDamage(t, 2); showDamageNumber(t.r, t.c, 2); log(`💎 ${u.emoji} → Мощная атака! ${t.emoji} -2`, 'gem'); }, cd: 2 },
+  double_strike: { id: 'double_strike', name: 'Двойной удар', emoji: '⚔️', color: 'red', desc: 'Авто: атака +1 урон', cost: 'Авто', trigger: 'auto', onTrigger: 'onAttack', effect: (u, t) => { let extra = 1; applyDamage(t, extra); showDamageNumber(t.r, t.c, extra); log(`💎 Двойной удар! +${extra}`, 'gem'); }, cd: 0 },
+  life_steal: { id: 'life_steal', name: 'Кровавый укус', emoji: '🩸', color: 'red', desc: 'Авто: +2 HP при убийстве', cost: 'Авто', trigger: 'auto', onTrigger: 'onKill', effect: (u) => { u.hp = Math.min(u.maxHp, u.hp + 2); showDamageNumber(u.r, u.c, 2, true); log('💎 Кровавый укус! +2 HP', 'gem'); }, cd: 0 },
+  war_cry: { id: 'war_cry', name: 'Боевой клич', emoji: '📯', color: 'red', desc: 'Союзникам рядом +1 ATK на ход', cost: '1 AP', trigger: 'active', targetType: 'self', apCost: 1, useEffect: (u) => { units.filter(a => a.isPlayer && a.alive && a.id !== u.id && getManhattanDist(u.r, u.c, a.r, a.c) <= 2).forEach(a => { a.atkBonus = (a.atkBonus || 0) + 1; const cell = getCell(a.r, a.c); if (cell) { cell.classList.add('aura-flash'); setTimeout(() => cell.classList.remove('aura-flash'), 600); } }); log(`💎 ${u.emoji} → Боевой клич! +1 ATK союзникам`, 'gem'); }, cd: 3 },
 
   // Green - Defense gems
-  iron_skin: { id: 'iron_skin', name: 'Железная кожа', emoji: '🛡️', color: 'green', desc: '+3 щита при получении урона, КД 3', cost: 'Авто', trigger: 'onDamaged', effect: (u) => { u.shield = (u.shield || 0) + 3; showDamageNumber(u.r, u.c, 3, true); log('💎 Железная кожа! +3 🛡', 'gem'); }, cd: 3 },
-  regeneration: { id: 'regeneration', name: 'Регенерация', emoji: '💚', color: 'green', desc: '+1 HP в начале хода', cost: 'Авто', trigger: 'onTurnStart', effect: (u) => { u.hp = Math.min(u.maxHp, u.hp + 1); log('💎 Регенерация! +1 HP', 'gem'); }, cd: 0 },
-  evasion: { id: 'evasion', name: 'Уклонение', emoji: '💨', color: 'green', desc: '30% шанс уклонения от атаки', cost: 'Авто', trigger: 'onHitCheck', effect: (u) => { log('💎 Уклонение!', 'gem'); return true; }, cd: 0 },
-  retaliate: { id: 'retaliate', name: 'Ответный удар', emoji: '↩️', color: 'green', desc: 'При получении урона: 1 урон врагу', cost: 'Авто', trigger: 'onDamaged', effect: (u, attacker) => { if (attacker) { applyDamage(attacker, 1); showDamageNumber(attacker.r, attacker.c, 1); log('💎 Ответный удар! -1 врагу', 'gem'); } }, cd: 0 },
+  iron_skin: { id: 'iron_skin', name: 'Железная кожа', emoji: '🛡️', color: 'green', desc: 'Авто: +3 щита при уроне, КД 3', cost: 'Авто', trigger: 'auto', onTrigger: 'onDamaged', effect: (u) => { u.shield = (u.shield || 0) + 3; showDamageNumber(u.r, u.c, 3, true); log('💎 Железная кожа! +3 🛡', 'gem'); }, cd: 3 },
+  regeneration: { id: 'regeneration', name: 'Регенерация', emoji: '💚', color: 'green', desc: 'Авто: +1 HP в начале хода', cost: 'Авто', trigger: 'auto', onTrigger: 'onTurnStart', effect: (u) => { u.hp = Math.min(u.maxHp, u.hp + 1); log('💎 Регенерация! +1 HP', 'gem'); }, cd: 0 },
+  evasion: { id: 'evasion', name: 'Уклонение', emoji: '💨', color: 'green', desc: 'Авто: 30% шанс уклонения', cost: 'Авто', trigger: 'auto', onTrigger: 'onHitCheck', effect: (u) => { log('💎 Уклонение!', 'gem'); return true; }, cd: 0 },
+  retaliate: { id: 'retaliate', name: 'Ответный удар', emoji: '↩️', color: 'green', desc: 'Авто: 1 урон врагу при получении урона', cost: 'Авто', trigger: 'auto', onTrigger: 'onDamaged', effect: (u, attacker) => { if (attacker) { applyDamage(attacker, 1); showDamageNumber(attacker.r, attacker.c, 1); log('💎 Ответный удар! -1 врагу', 'gem'); } }, cd: 0 },
+  inspiration: { id: 'inspiration', name: 'Вдохновение', emoji: '✨', color: 'green', desc: 'Союзникам рядом +1 AP', cost: '1 AP', trigger: 'active', targetType: 'self', apCost: 1, useEffect: (u) => { units.filter(a => a.isPlayer && a.alive && getManhattanDist(u.r, u.c, a.r, a.c) <= 2).forEach(a => { a.ap = Math.min(a.maxAp + (a.apBonus || 0), a.ap + 1); const cell = getCell(a.r, a.c); if (cell) { cell.classList.add('aura-flash'); setTimeout(() => cell.classList.remove('aura-flash'), 600); } }); log(`💎 ${u.emoji} → Вдохновение! +1 AP союзникам`, 'gem'); }, cd: 3 },
 
-  // Blue - Aura gems
-  frenzy: { id: 'frenzy', name: 'Френзи', emoji: '⚡', color: 'blue', desc: '+1 MP всем союзникам в радиусе 2', cost: 'Аура', trigger: 'aura', auraRange: 2, auraEffect: (ally) => { ally.mpBonus = (ally.mpBonus || 0) + 1; log(`💎 Френзи: ${ally.emoji} +1 MP`, 'gem'); } },
-  vitality: { id: 'vitality', name: 'Живучесть', emoji: '❤️', color: 'blue', desc: '+3 макс HP всем союзникам в радиусе 2', cost: 'Аура', trigger: 'aura', auraRange: 2, auraEffect: (ally) => { ally.maxHp += 3; ally.hp += 3; log(`💎 Живучесть: ${ally.emoji} +3 HP`, 'gem'); } },
-  discipline: { id: 'discipline', name: 'Дисциплина', emoji: '🎯', color: 'blue', desc: '+1 AP всем союзникам в радиусе 2', cost: 'Аура', trigger: 'aura', auraRange: 2, auraEffect: (ally) => { ally.apBonus = (ally.apBonus || 0) + 1; log(`💎 Дисциплина: ${ally.emoji} +1 AP`, 'gem'); } },
-  haste: { id: 'haste', name: 'Поспешность', emoji: '🏃', color: 'blue', desc: '+1 дальность движения союзникам', cost: 'Аура', trigger: 'aura', auraRange: 2, auraEffect: (ally) => { ally.moveBonus = (ally.moveBonus || 0) + 1; log(`💎 Поспешность: ${ally.emoji} +1 движение`, 'gem'); } },
+  // Blue - Aura gems automatic
+  frenzy: { id: 'frenzy', name: 'Френзи', emoji: '⚡', color: 'blue', desc: 'Аура: +1 MP союзникам в R=2', cost: 'Аура', trigger: 'aura', auraRange: 2, auraEffect: (ally) => { ally.mpBonus = (ally.mpBonus || 0) + 1; log(`💎 Френзи: ${ally.emoji} +1 MP`, 'gem'); } },
+  vitality: { id: 'vitality', name: 'Живучесть', emoji: '❤️', color: 'blue', desc: 'Аура: +3 HP союзникам в R=2', cost: 'Аура', trigger: 'aura', auraRange: 2, auraEffect: (ally) => { ally.maxHp += 3; ally.hp += 3; log(`💎 Живучесть: ${ally.emoji} +3 HP`, 'gem'); } },
+  discipline: { id: 'discipline', name: 'Дисциплина', emoji: '🎯', color: 'blue', desc: 'Аура: +1 AP союзникам в R=2', cost: 'Аура', trigger: 'aura', auraRange: 2, auraEffect: (ally) => { ally.apBonus = (ally.apBonus || 0) + 1; log(`💎 Дисциплина: ${ally.emoji} +1 AP`, 'gem'); } },
 
   // Yellow - Utility gems
-  teleport: { id: 'teleport', name: 'Телепорт', emoji: '✨', color: 'yellow', desc: 'Телепорт на 2 клетки вперёд, КД 4', cost: '1 AP', trigger: 'onMove', effect: (u) => { let nr = u.r - 2; if (nr < 0) nr = 0; if (!isWall(nr, u.c) && !getUnitAt(nr, u.c)) { u.r = nr; u.mp = 0; log(`💎 Телепорт на [${nr},${u.c}]!`, 'gem'); } }, cd: 4 },
-  push_back: { id: 'push_back', name: 'Отталкивание', emoji: '💫', color: 'yellow', desc: 'При атаке: отбросить на 2 клетки', cost: '1 AP', trigger: 'onAttack', effect: (u, t) => { let pr = t.r + Math.sign(t.r - u.r) * 2; let pc = t.c + Math.sign(t.c - u.c) * 2; pr = Math.max(0, Math.min(GRID_SIZE-1, pr)); pc = Math.max(0, Math.min(GRID_SIZE-1, pc)); if (!isWall(pr, pc) && !getUnitAt(pr, pc) && t.alive) { t.r = pr; t.c = pc; log(`💎 Отталкивание! ${t.emoji} → [${pr},${pc}]`, 'gem'); } }, cd: 0 },
-  freeze: { id: 'freeze', name: 'Заморозка', emoji: '❄️', color: 'yellow', desc: 'При атаке: -1 MP врагу, КД 2', cost: '1 AP', trigger: 'onAttack', effect: (u, t) => { if (t.mp > 0) { t.mp = Math.max(0, t.mp - 1); log(`💎 Заморозка! ${t.emoji} -1 MP`, 'gem'); } }, cd: 2 },
-  sniper_shot: { id: 'sniper_shot', name: 'Снайперский выстрел', emoji: '🎯', color: 'yellow', desc: 'При убийстве: +1 AP', cost: 'Авто', trigger: 'onKill', effect: (u) => { u.ap = Math.min(u.maxAp + 1, u.ap + 1); log('💎 Снайпер! +1 AP', 'gem'); }, cd: 0 },
+  teleport: { id: 'teleport', name: 'Телепорт', emoji: '✨', color: 'yellow', desc: 'Телепорт на пустую клетку в R=3', cost: '1 AP', trigger: 'active', targetType: 'cell', range: 3, apCost: 1, useEffect: (u, r, c) => { u.r = r; u.c = c; log(`💎 ${u.emoji} → Телепорт на [${r},${c}]!`, 'gem'); }, cd: 4 },
+  push_back: { id: 'push_back', name: 'Отталкивание', emoji: '💫', color: 'yellow', desc: 'Авто: отбросить врага на 2 при атаке', cost: 'Авто', trigger: 'auto', onTrigger: 'onAttack', effect: (u, t) => { let pr = t.r + Math.sign(t.r - u.r) * 2; let pc = t.c + Math.sign(t.c - u.c) * 2; pr = Math.max(0, Math.min(GRID_SIZE-1, pr)); pc = Math.max(0, Math.min(GRID_SIZE-1, pc)); if (!isWall(pr, pc) && !getUnitAt(pr, pc) && t.alive) { t.r = pr; t.c = pc; log(`💎 Отталкивание! ${t.emoji} → [${pr},${pc}]`, 'gem'); } }, cd: 0 },
+  freeze: { id: 'freeze', name: 'Заморозка', emoji: '❄️', color: 'yellow', desc: 'Врагу: -2 MP, КД 3', cost: '1 AP', trigger: 'active', targetType: 'enemy', apCost: 1, useEffect: (u, t) => { if (t.mp > 0) { t.mp = Math.max(0, t.mp - 2); showDamageNumber(t.r, t.c, 2); log(`💎 Заморозка! ${t.emoji} -2 MP`, 'gem'); } }, cd: 3 },
+  sniper_shot: { id: 'sniper_shot', name: 'Снайперский выстрел', emoji: '🎯', color: 'yellow', desc: 'Авто: +1 AP при убийстве', cost: 'Авто', trigger: 'auto', onTrigger: 'onKill', effect: (u) => { u.ap = Math.min(u.maxAp + 1, u.ap + 1); log('💎 Снайпер! +1 AP', 'gem'); }, cd: 0 },
 };
 
 const UNIT_TYPES = {
-  knight: { name: 'Рыцарь', emoji: '🛡️', hp: 12, maxHp: 12, atk: 4, mp: 3, ap: 2, move: 3, range: 1, skill: 'Щит', skillDesc: '+4 щита', skillCd: 3, skillDmg: 0, skillHeal: 4, skillRange: 0, type: 'melee', defaultGems: ['iron_skin', 'berserk'] },
-  archer: { name: 'Лучник', emoji: '🏹', hp: 7, maxHp: 7, atk: 3, mp: 4, ap: 2, move: 4, range: 3, skill: 'Пронзая стрела', skillDesc: 'Урон 5', skillCd: 4, skillDmg: 5, skillHeal: 0, skillRange: 5, type: 'ranged', defaultGems: ['power_attack', 'sniper_shot'] },
-  mage: { name: 'Маг', emoji: '🔮', hp: 6, maxHp: 6, atk: 3, mp: 3, ap: 3, move: 3, range: 2, skill: 'Огненный шар', skillDesc: 'Урон 4 АоЕ', skillCd: 3, skillDmg: 4, skillHeal: 0, skillRange: 2, type: 'aoe', defaultGems: ['frenzy', 'freeze'] },
-  healer: { name: 'Целитель', emoji: '💚', hp: 5, maxHp: 5, atk: 1, mp: 3, ap: 2, move: 3, range: 1, skill: 'Исцеление', skillDesc: 'Лечение +5', skillCd: 3, skillDmg: 0, skillHeal: 5, skillRange: 2, type: 'heal', defaultGems: ['vitality', 'regeneration'] },
+  knight: { name: 'Рыцарь', emoji: '🛡️', hp: 12, maxHp: 12, atk: 4, mp: 3, ap: 2, move: 3, range: 1, skill: 'Щит', skillDesc: '+4 щита', skillCd: 3, skillDmg: 0, skillHeal: 4, skillRange: 0, type: 'melee', defaultGems: ['iron_skin', 'war_cry'] },
+  archer: { name: 'Лучник', emoji: '🏹', hp: 7, maxHp: 7, atk: 3, mp: 4, ap: 2, move: 4, range: 3, skill: 'Пронзая стрела', skillDesc: 'Урон 5', skillCd: 4, skillDmg: 5, skillHeal: 0, skillRange: 5, type: 'ranged', defaultGems: ['power_attack', 'double_strike'] },
+  mage: { name: 'Маг', emoji: '🔮', hp: 6, maxHp: 6, atk: 3, mp: 3, ap: 3, move: 3, range: 2, skill: 'Огненный шар', skillDesc: 'Урон 4 АоЕ', skillCd: 3, skillDmg: 4, skillHeal: 0, skillRange: 2, type: 'aoe', defaultGems: ['inspiration', 'freeze'] },
+  healer: { name: 'Целитель', emoji: '💚', hp: 5, maxHp: 5, atk: 1, mp: 3, ap: 2, move: 3, range: 1, skill: 'Исцеление', skillDesc: 'Лечение +5', skillCd: 3, skillDmg: 0, skillHeal: 5, skillRange: 2, type: 'heal', defaultGems: ['vitality', 'teleport'] },
   grunt: { name: 'Грунт', emoji: '👹', hp: 6, maxHp: 6, atk: 3, mp: 3, ap: 2, move: 3, range: 1, type: 'melee' },
   sniper: { name: 'Снайпер', emoji: '🎯', hp: 4, maxHp: 4, atk: 4, mp: 2, ap: 2, move: 2, range: 3, type: 'ranged' },
   tank: { name: 'Танк', emoji: '🔴', hp: 10, maxHp: 10, atk: 2, mp: 1, ap: 2, move: 1, range: 1, type: 'melee' },
@@ -1044,6 +1047,7 @@ const UNIT_TYPES = {
 
 let units = [];
 let selectedUnit = null;
+let currentGemId = null;
 let currentPhase = 'idle';
 let currentTab = 'unit';
 let turn = 1;
@@ -1290,15 +1294,54 @@ function triggerGem(unit, triggerType, context) {
   unit.gems.forEach(g => {
     if (!g.enabled) return;
     const gemDef = ALL_GEMS[g.gemId];
-    if (!gemDef || gemDef.trigger !== triggerType) return;
+    if (!gemDef || gemDef.trigger !== 'auto' || gemDef.onTrigger !== triggerType) return;
     if (g.cdRemaining > 0) return;
     if (gemDef.effect) {
       gemDef.effect(unit, context);
     }
     if (gemDef.cd > 0) g.cdRemaining = gemDef.cd;
-    // Show floating gem indicator
     showGemTriggerPopup(unit.r, unit.c, gemDef.emoji, gemDef.name);
   });
+}
+
+function getActiveGems(u) {
+  if (!u.gems) return [];
+  return u.gems.filter(g => g && g.enabled && ALL_GEMS[g.gemId] && ALL_GEMS[g.gemId].trigger === 'active' && g.cdRemaining <= 0);
+}
+
+function useActiveGem(unit, gemId, targetR, targetC) {
+  const gemDef = ALL_GEMS[gemId];
+  if (!gemDef || gemDef.trigger !== 'active') return false;
+  const slot = unit.gems.find(g => g.gemId === gemId);
+  if (!slot || !slot.enabled) return false;
+  if (getEffectiveAp(unit) < gemDef.apCost) { log(`⚠ Недостаточно AP для ${gemDef.name}`, 'system'); return false; }
+  if (slot.cdRemaining > 0) return false;
+
+  // Execute based on target type
+  const target = getUnitAt(targetR, targetC);
+  if (gemDef.targetType === 'enemy') {
+    if (!target || target.isPlayer || !target.alive) return false;
+    if (getManhattanDist(unit.r, unit.c, targetR, targetC) > (gemDef.range || 5)) return false;
+    unit.ap -= gemDef.apCost;
+    gemDef.useEffect(unit, target, targetR, targetC);
+  } else if (gemDef.targetType === 'ally') {
+    if (!target || !target.isPlayer || !target.alive) return false;
+    if (getManhattanDist(unit.r, unit.c, targetR, targetC) > (gemDef.range || 5)) return false;
+    unit.ap -= gemDef.apCost;
+    gemDef.useEffect(unit, target, targetR, targetC);
+  } else if (gemDef.targetType === 'self') {
+    unit.ap -= gemDef.apCost;
+    gemDef.useEffect(unit, targetR, targetC);
+  } else if (gemDef.targetType === 'cell') {
+    if (isWall(targetR, targetC) || getUnitAt(targetR, targetC)) return false;
+    if (getManhattanDist(unit.r, unit.c, targetR, targetC) > (gemDef.range || 5)) return false;
+    unit.ap -= gemDef.apCost;
+    gemDef.useEffect(unit, targetR, targetC);
+  }
+
+  if (gemDef.cd > 0) slot.cdRemaining = gemDef.cd;
+  showGemTriggerPopup(unit.r, unit.c, gemDef.emoji, gemDef.name);
+  return true;
 }
 
 function showGemTriggerPopup(r, c, emoji, name) {
@@ -1320,10 +1363,8 @@ function applyAuraEffects() {
       if (!g.enabled) return;
       const gemDef = ALL_GEMS[g.gemId];
       if (!gemDef || gemDef.trigger !== 'aura') return;
-      // Apply aura to nearby allies
       units.filter(a => a.isPlayer && a.alive && a.id !== u.id).forEach(a => {
         if (getManhattanDist(u.r, u.c, a.r, a.c) <= gemDef.auraRange) {
-          // Only apply once per turn (check flag)
           if (!a._auraApplied || !a._auraApplied.includes(g.gemId)) {
             if (!a._auraApplied) a._auraApplied = [];
             a._auraApplied.push(g.gemId);
@@ -1432,6 +1473,43 @@ function showDamageNumber(r, c, amount, isHeal = false) {
 }
 
 // ── CLICK HANDLER ──
+
+function showGemEffectRange(unit, gemDef) {
+  clearHighlights();
+  const range = gemDef.range || 5;
+  const cell = getCell(unit.r, unit.c);
+  if (cell) cell.classList.add('selected');
+
+  if (gemDef.targetType === 'self') {
+    // Just highlight self
+    return;
+  }
+
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const dist = getManhattanDist(unit.r, unit.c, r, c);
+      if (dist > range || dist === 0) continue;
+      if (gemDef.targetType === 'enemy') {
+        const u = getUnitAt(r, c);
+        if (u && !u.isPlayer && u.alive) {
+          const cell = getCell(r, c);
+          if (cell) cell.classList.add('attack-range');
+        }
+      } else if (gemDef.targetType === 'ally') {
+        const u = getUnitAt(r, c);
+        if (u && u.isPlayer && u.alive && u.id !== unit.id) {
+          const cell = getCell(r, c);
+          if (cell) cell.classList.add('skill-range');
+        }
+      } else if (gemDef.targetType === 'cell') {
+        if (!isWall(r, c) && !getUnitAt(r, c)) {
+          const cell = getCell(r, c);
+          if (cell) cell.classList.add('move-range');
+        }
+      }
+    }
+  }
+}
 function onCellClick(r, c) {
   if (gameOver || animating || currentPhase === 'enemy') return;
   const clickedUnit = getUnitAt(r, c);
@@ -1476,6 +1554,25 @@ function onCellClick(r, c) {
       performSkill(selectedUnit, r, c);
       selectedUnit.skillCurrentCd = selectedUnit.skillCd;
       clearHighlights(); afterAction(); vibrate([10, 5, 20]);
+    }
+    return;
+  }
+
+  // Gem phase — using an active gem
+  if (currentPhase === 'gem') {
+    if (!currentGemId) { currentPhase = 'idle'; updateUI(); return; }
+    const gemDef = ALL_GEMS[currentGemId];
+    if (!gemDef) { currentPhase = 'idle'; updateUI(); return; }
+    const dist = getManhattanDist(selectedUnit.r, selectedUnit.c, r, c);
+    const maxRange = gemDef.range || 5;
+    if (dist > maxRange) return;
+
+    const success = useActiveGem(selectedUnit, currentGemId, r, c);
+    if (success) {
+      clearHighlights();
+      currentGemId = null;
+      afterAction();
+      vibrate([10, 5, 20]);
     }
     return;
   }
@@ -1701,6 +1798,8 @@ async function endPlayerTurn() {
   // Trigger onTurnStart gems
   units.filter(u => u.isPlayer && u.alive).forEach(u => {
     triggerGem(u, 'onTurnStart');
+    // onLowHp trigger
+    if (u.hp / u.maxHp < 0.5) triggerGem(u, 'onLowHp');
   });
 
   if (turn % 3 === 0) spawnReinforcements();
@@ -1791,6 +1890,44 @@ function updateUI() {
     strip.innerHTML = '<div class="no-unit-strip">Нажмите на юнита</div>';
   }
 
+  // Active gem buttons
+  const gemActionsEl = document.getElementById('gem-actions');
+  if (selectedUnit && currentPhase !== 'enemy') {
+    const activeGems = getActiveGems(selectedUnit);
+    if (activeGems.length > 0) {
+      gemActionsEl.style.display = 'flex';
+      gemActionsEl.innerHTML = '';
+      activeGems.forEach(g => {
+        const gemDef = ALL_GEMS[g.gemId];
+        if (!gemDef) return;
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.style.cssText = `flex:.8;font-size:10px;padding:8px 4px;min-height:36px;border-color:var(--gem-${gemDef.color});color:var(--gem-${gemDef.color});background:rgba(255,255,255,0.04);`;
+        const targetLabels = { enemy: 'враг', ally: 'союзник', self: 'себя', cell: 'клетка', area: 'зона' };
+        btn.textContent = `${gemDef.emoji} ${gemDef.name} [${targetLabels[gemDef.targetType]||'?'}]`;
+        btn.disabled = currentPhase !== 'idle' || getEffectiveAp(selectedUnit) < (gemDef.apCost || 1);
+        btn.addEventListener('click', () => {
+          if (currentPhase !== 'idle' || getEffectiveAp(selectedUnit) < (gemDef.apCost || 1)) return;
+          if (gemDef.targetType === 'self') {
+            const success = useActiveGem(selectedUnit, gemDef.id, selectedUnit.r, selectedUnit.c);
+            if (success) { afterAction(); vibrate([10, 5, 20]); }
+            return;
+          }
+          currentPhase = 'gem';
+          currentGemId = gemDef.id;
+          showGemEffectRange(selectedUnit, gemDef);
+          updateUI();
+          vibrate(10);
+        });
+        gemActionsEl.appendChild(btn);
+      });
+    } else {
+      gemActionsEl.style.display = 'none';
+    }
+  } else {
+    gemActionsEl.style.display = 'none';
+  }
+
   // Gems panel
   updateGemsPanel();
   renderUnits();
@@ -1853,10 +1990,16 @@ function updateGemsPanel() {
       slot.appendChild(icon);
 
       // Trigger badge
+      let triggerLabel = '';
+      if (gemDef.trigger === 'active') triggerLabel = '⚡ ручное';
+      else if (gemDef.trigger === 'aura') triggerLabel = '💎 аура';
+      else if (gemDef.trigger === 'auto') {
+        const autoLabels = { onAttack: '⚔ при атаке', onKill: '💀 при убийстве', onMove: '👣 при движении', onDamaged: '❤️ при уроне', onTurnStart: '🔄 каждый ход', onHitCheck: '💨 защита', onLowHp: '🔥 при <50% HP' };
+        triggerLabel = autoLabels[gemDef.onTrigger] || '⚙️ авто';
+      }
       const triggerBadge = document.createElement('div');
-      const triggerLabels = { onAttack: '⚔ при атаке', onKill: '💀 при убийстве', onMove: '👣 при движении', onDamaged: '❤️ при уроне', onTurnStart: '🔄 каждый ход', aura: '💎 аура', onHitCheck: '💨 защита' };
       triggerBadge.style.cssText = 'position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:7px;color:var(--text-muted);';
-      triggerBadge.textContent = triggerLabels[gemDef.trigger] || '';
+      triggerBadge.textContent = triggerLabel;
       slot.appendChild(triggerBadge);
 
       const name = document.createElement('div');
@@ -1932,15 +2075,20 @@ function openGemSelect(unit, slotIndex) {
       const item = document.createElement('div');
       item.className = `gem-select-item${isEquipped ? ' equipped' : ''}`;
 
-      const triggerLabels = { onAttack: '⚔ при атаке', onKill: '💀 при убийстве', onMove: '👣 при движении', onDamaged: '❤️ при уроне', onTurnStart: '🔄 каждый ход', aura: '💎 аура (радиус 2)', onHitCheck: '💨 защита' };
-      const triggerLabel = triggerLabels[gemDef.trigger] || gemDef.trigger;
+      let gemTriggerLabel = '';
+      if (gemDef.trigger === 'active') gemTriggerLabel = '⚡ ручное';
+      else if (gemDef.trigger === 'aura') gemTriggerLabel = '💎 аура (радиус 2)';
+      else if (gemDef.trigger === 'auto') {
+        const autoLabels = { onAttack: '⚔ при атаке', onKill: '💀 при убийстве', onMove: '👣 при движении', onDamaged: '❤️ при уроне', onTurnStart: '🔄 каждый ход', onHitCheck: '💨 защита', onLowHp: '🔥 при <50% HP' };
+        gemTriggerLabel = autoLabels[gemDef.onTrigger] || '⚙️ авто';
+      }
 
       item.innerHTML = `
         <div class="gsi-icon ${gemDef.color}">${gemDef.emoji}</div>
         <div class="gsi-info">
           <div class="gsi-name">${gemDef.name}</div>
           <div class="gsi-desc">${gemDef.desc}</div>
-          <div class="gsi-cost">${triggerLabel}${isEquipped ? ' ✓' : ''}</div>
+          <div class="gsi-cost">${gemTriggerLabel}${isEquipped ? ' ✓' : ''}</div>
         </div>`;
 
       if (!isEquipped) {
