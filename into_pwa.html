@@ -1016,7 +1016,7 @@ const ALL_GEMS = {
   iron_skin: { id: 'iron_skin', name: 'Железная кожа', emoji: '🛡️', color: 'green', desc: '+3 щита при получении урона, КД 3', cost: 'Авто', trigger: 'onDamaged', effect: (u) => { u.shield = (u.shield || 0) + 3; showDamageNumber(u.r, u.c, 3, true); log('💎 Железная кожа! +3 🛡', 'gem'); }, cd: 3 },
   regeneration: { id: 'regeneration', name: 'Регенерация', emoji: '💚', color: 'green', desc: '+1 HP в начале хода', cost: 'Авто', trigger: 'onTurnStart', effect: (u) => { u.hp = Math.min(u.maxHp, u.hp + 1); log('💎 Регенерация! +1 HP', 'gem'); }, cd: 0 },
   evasion: { id: 'evasion', name: 'Уклонение', emoji: '💨', color: 'green', desc: '30% шанс уклонения от атаки', cost: 'Авто', trigger: 'onHitCheck', effect: (u) => { log('💎 Уклонение!', 'gem'); return true; }, cd: 0 },
-  retaliiate: { id: 'retaliate', name: 'Ответный удар', emoji: '↩️', color: 'green', desc: 'При получении урона: 1 урон врагу', cost: 'Авто', trigger: 'onDamaged', effect: (u, attacker) => { if (attacker) { applyDamage(attacker, 1); showDamageNumber(attacker.r, attacker.c, 1); log('💎 Ответный удар! -1 врагу', 'gem'); } }, cd: 0 },
+  retaliate: { id: 'retaliate', name: 'Ответный удар', emoji: '↩️', color: 'green', desc: 'При получении урона: 1 урон врагу', cost: 'Авто', trigger: 'onDamaged', effect: (u, attacker) => { if (attacker) { applyDamage(attacker, 1); showDamageNumber(attacker.r, attacker.c, 1); log('💎 Ответный удар! -1 врагу', 'gem'); } }, cd: 0 },
 
   // Blue - Aura gems
   frenzy: { id: 'frenzy', name: 'Френзи', emoji: '⚡', color: 'blue', desc: '+1 MP всем союзникам в радиусе 2', cost: 'Аура', trigger: 'aura', auraRange: 2, auraEffect: (ally) => { ally.mpBonus = (ally.mpBonus || 0) + 1; log(`💎 Френзи: ${ally.emoji} +1 MP`, 'gem'); } },
