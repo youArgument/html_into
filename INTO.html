@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Into the Breach — Tactical Combat</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0b0e14;
+    --surface: #131720;
+    --surface2: #1a1f2b;
+    --surface3: #222838;
+    --border: #2a3040;
+    --border-light: #3a4260;
+    --text: #e2e8f0;
+    --text-dim: #8892a8;
+    --text-muted: #5a6478;
+    --accent: #f59e0b;
+    --accent-glow: rgba(245,158,11,0.3);
+    --blue: #3b82f6;
+    --blue-glow: rgba(59,130,246,0.4);
+    --red: #ef4444;
+    --red-glow: rgba(239,68,68,0.4);
+    --green: #22c55e;
+    --green-glow: rgba(34,197,94,0.4);
+    --purple: #a855f7;
+    --purple-glow: rgba(168,85,247,0.4);
+    --cyan: #06b6d4;
+    --cell: 60px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 20%, rgba(59,130,246,0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(245,158,11,0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 50%, rgba(168,85,247,0.03) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 900px;
+  }
+
+  .logo {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, var(--accent), #f97316);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 12px var(--accent-glow));
+  }
+
+  .top-stats {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .stat-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-dim);
+    transition: all 0.2s;
+  }
+
+  .stat-chip .val {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .stat-chip.turn .val { color: var(--accent); }
+  .stat-chip.score .val { color: var(--green); }
+  .stat-chip.phase .val { color: var(--cyan); }
+
+  /* ── MAIN LAYOUT ── */
+  .main {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 0 20px;
+  }
+
+  /* ── GRID ── */
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(8, var(--cell));
+    grid-template-rows: repeat(8, var(--cell));
+    gap: 3px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 6px;
+    position: relative;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.03),
+      0 8px 32px rgba(0,0,0,0.5),
+      0 0 80px rgba(59,130,246,0.05);
+  }
+
+  .cell {
+    width: var(--cell);
+    height: var(--cell);
+    background: var(--surface2);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s ease;
+    font-size: 11px;
+  }
+
+  .cell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+
+  .cell:hover {
+    background: var(--surface3);
+  }
+  .cell:hover::before {
+    border-color: var(--border-light);
+  }
+
+  /* Move range */
+  .cell.move-range {
+    background: rgba(34,197,94,0.08);
+    cursor: pointer;
+  }
+  .cell.move-range::before {
+    border-color: rgba(34,197,94,0.2);
+  }
+  .cell.move-range::after {
+    content: '';
+    position: absolute;
+    width: 10px; height: 10px;
+    background: var(--green);
+    border-radius: 50%;
+    opacity: 0.4;
+    box-shadow: 0 0 8px var(--green-glow);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  /* Attack range */
+  .cell.attack-range {
+    background: rgba(239,68,68,0.08);
+    cursor: crosshair;
+  }
+  .cell.attack-range::before {
+    border-color: rgba(239,68,68,0.25);
+  }
+  .cell.attack-range::after {
+    content: '⚔';
+    position: absolute;
+    font-size: 14px;
+    opacity: 0.5;
+    filter: drop-shadow(0 0 4px var(--red-glow));
+  }
+
+  /* Skill range */
+  .cell.skill-range {
+    background: rgba(168,85,247,0.08);
+    cursor: pointer;
+  }
+  .cell.skill-range::before {
+    border-color: rgba(168,85,247,0.25);
+  }
+  .cell.skill-range::after {
+    content: '✦';
+    position: absolute;
+    font-size: 14px;
+    opacity: 0.5;
+    filter: drop-shadow(0 0 4px var(--purple-glow));
+  }
+
+  /* Enemy intent */
+  .cell.enemy-intent-move {
+    background: rgba(239,68,68,0.06);
+  }
+  .cell.enemy-intent-attack {
+    background: rgba(239,68,68,0.12);
+    animation: intent-pulse 1.5s ease-in-out infinite;
+  }
+
+  /* Selected */
+  .cell.selected {
+    background: rgba(6,182,212,0.08);
+  }
+  .cell.selected::before {
+    border-color: var(--cyan);
+    box-shadow: inset 0 0 12px rgba(6,182,212,0.15);
+  }
+
+  /* Flash */
+  .cell.damage-flash {
+    animation: dmgFlash 0.5s ease-out;
+  }
+  @keyframes dmgFlash {
+    0% { background: rgba(239,68,68,0.5); }
+    100% { background: var(--surface2); }
+  }
+  .cell.heal-flash {
+    animation: healFlash 0.5s ease-out;
+  }
+  @keyframes healFlash {
+    0% { background: rgba(34,197,94,0.4); }
+    100% { background: var(--surface2); }
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.3); }
+  }
+  @keyframes intent-pulse {
+    0%, 100% { background: rgba(239,68,68,0.08); }
+    50% { background: rgba(239,68,68,0.18); }
+  }
+
+  /* ── WALLS ── */
+  .terrain-wall {
+    background: linear-gradient(135deg, #1e2330, #161b26) !important;
+    cursor: not-allowed;
+  }
+  .terrain-wall::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.05);
+    background:
+      repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 4px,
+        rgba(255,255,255,0.015) 4px,
+        rgba(255,255,255,0.015) 8px
+      );
+  }
+  .terrain-wall::after {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    border-radius: 3px;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 50%),
+      linear-gradient(225deg, rgba(0,0,0,0.3) 0%, transparent 50%);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+  }
+
+  /* ── UNITS ── */
+  .unit {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    z-index: 3;
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .unit.player {
+    background: linear-gradient(145deg, #1e3a5f, #152840);
+    border: 1.5px solid rgba(59,130,246,0.5);
+    box-shadow:
+      0 2px 8px rgba(0,0,0,0.4),
+      0 0 16px rgba(59,130,246,0.15),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+
+  .unit.enemy {
+    background: linear-gradient(145deg, #4a1e1e, #351515);
+    border: 1.5px solid rgba(239,68,68,0.4);
+    box-shadow:
+      0 2px 8px rgba(0,0,0,0.4),
+      0 0 16px rgba(239,68,68,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  .unit.selected-unit {
+    border-color: var(--cyan);
+    box-shadow:
+      0 0 0 2px rgba(6,182,212,0.3),
+      0 2px 12px rgba(0,0,0,0.4),
+      0 0 24px rgba(6,182,212,0.25);
+    transform: scale(1.08);
+    z-index: 4;
+  }
+
+  .unit.dead {
+    opacity: 0;
+    transform: scale(0) rotate(180deg);
+  }
+
+  /* HP bar */
+  .hp-bar-container {
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 2px;
+    overflow: hidden;
+    z-index: 4;
+  }
+  .hp-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+  .hp-bar.player-hp {
+    background: linear-gradient(90deg, #16a34a, #22c55e);
+    box-shadow: 0 0 6px var(--green-glow);
+  }
+  .hp-bar.enemy-hp {
+    background: linear-gradient(90deg, #dc2626, #ef4444);
+    box-shadow: 0 0 6px var(--red-glow);
+  }
+
+  /* Resource dots on units */
+  .unit-resources {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 3px;
+    z-index: 5;
+  }
+  .res-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    transition: all 0.2s;
+  }
+  .res-dot.mp {
+    background: var(--green);
+    box-shadow: 0 0 4px var(--green-glow);
+  }
+  .res-dot.mp.empty {
+    background: rgba(34,197,94,0.15);
+    box-shadow: none;
+  }
+  .res-dot.ap {
+    background: var(--accent);
+    box-shadow: 0 0 4px var(--accent-glow);
+  }
+  .res-dot.ap.empty {
+    background: rgba(245,158,11,0.15);
+    box-shadow: none;
+  }
+
+  /* Shield badge */
+  .shield-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    font-size: 10px;
+    color: var(--blue);
+    background: var(--surface);
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 8px;
+    padding: 1px 4px;
+    z-index: 5;
+    font-weight: 600;
+  }
+
+  /* Intent arrows */
+  .intent-arrow {
+    position: absolute;
+    z-index: 5;
+    pointer-events: none;
+    font-size: 14px;
+    color: rgba(239,68,68,0.6);
+    filter: drop-shadow(0 0 4px rgba(239,68,68,0.3));
+  }
+
+  /* Damage numbers */
+  .damage-number {
+    position: absolute;
+    z-index: 10;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--red);
+    pointer-events: none;
+    animation: floatUp 1.2s ease-out forwards;
+    text-shadow:
+      0 0 8px var(--red-glow),
+      0 1px 2px rgba(0,0,0,0.8);
+    font-family: 'Inter', sans-serif;
+  }
+  .damage-number.heal {
+    color: var(--green);
+    text-shadow:
+      0 0 8px var(--green-glow),
+      0 1px 2px rgba(0,0,0,0.8);
+  }
+  @keyframes floatUp {
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    20% { transform: translateY(-8px) scale(1.2); }
+    100% { opacity: 0; transform: translateY(-50px) scale(0.8); }
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 220px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+
+  .panel-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  /* Unit info */
+  #unit-info .unit-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--blue);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #unit-info .unit-name.enemy-name { color: var(--red); }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-label { color: var(--text-muted); }
+  .info-value { color: var(--text); font-weight: 600; }
+  .info-value.hp { color: var(--green); }
+  .info-value.mp { color: var(--green); }
+  .info-value.ap { color: var(--accent); }
+  .info-value.atk { color: var(--red); }
+
+  .resource-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .resource-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+  .resource-bar-fill.hp { background: linear-gradient(90deg, #16a34a, #22c55e); }
+  .resource-bar-fill.mp { background: linear-gradient(90deg, #15803d, #22c55e); }
+  .resource-bar-fill.ap { background: linear-gradient(90deg, #d97706, #f59e0b); }
+
+  /* Action buttons */
+  .actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn {
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-dim);
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--surface3);
+    color: var(--text);
+    border-color: var(--border-light);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .btn:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  .btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .btn-attack {
+    border-color: rgba(239,68,68,0.3);
+    color: var(--red);
+  }
+  .btn-attack:hover:not(:disabled) {
+    background: rgba(239,68,68,0.1);
+    border-color: rgba(239,68,68,0.5);
+    color: #f87171;
+    box-shadow: 0 4px 16px rgba(239,68,68,0.15);
+  }
+
+  .btn-skill {
+    border-color: rgba(168,85,247,0.3);
+    color: var(--purple);
+  }
+  .btn-skill:hover:not(:disabled) {
+    background: rgba(168,85,247,0.1);
+    border-color: rgba(168,85,247,0.5);
+    color: #c084fc;
+    box-shadow: 0 4px 16px rgba(168,85,247,0.15);
+  }
+
+  .btn-end {
+    border-color: rgba(245,158,11,0.3);
+    color: var(--accent);
+    margin-top: 4px;
+  }
+  .btn-end:hover:not(:disabled) {
+    background: rgba(245,158,11,0.1);
+    border-color: rgba(245,158,11,0.5);
+    color: #fbbf24;
+    box-shadow: 0 4px 16px rgba(245,158,11,0.15);
+  }
+
+  /* Log */
+  #log {
+    width: 100%;
+    max-height: 140px;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 11px;
+    line-height: 1.6;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+  #log::-webkit-scrollbar { width: 4px; }
+  #log::-webkit-scrollbar-track { background: transparent; }
+  #log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  #log div { padding: 1px 0; }
+  #log .log-player { color: var(--blue); }
+  #log .log-enemy { color: var(--red); }
+  #log .log-system { color: var(--accent); }
+  #log .log-heal { color: var(--green); }
+
+  /* ── OVERLAY ── */
+  #overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    flex-direction: column;
+    gap: 16px;
+  }
+  #overlay.hidden { display: none; }
+
+  #overlay h2 {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+  }
+  #overlay h2.win {
+    background: linear-gradient(135deg, #22c55e, #4ade80);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 20px var(--green-glow));
+  }
+  #overlay h2.lose {
+    background: linear-gradient(135deg, #ef4444, #f87171);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 20px var(--red-glow));
+  }
+  #overlay p {
+    color: var(--text-dim);
+    font-size: 15px;
+    margin-bottom: 8px;
+  }
+
+  /* ── TOOLTIP ── */
+  .tooltip {
+    position: absolute;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 11px;
+    color: var(--text-dim);
+    z-index: 50;
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    backdrop-filter: blur(4px);
+  }
+  .tooltip strong { color: var(--text); }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+    padding: 16px 0;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .main { flex-direction: column; align-items: center; }
+    .sidebar { width: 100%; max-width: 500px; flex-direction: row; flex-wrap: wrap; }
+    .sidebar .panel { flex: 1; min-width: 200px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⚔ Into the Breach</div>
+  <div class="top-stats">
+    <div class="stat-chip turn">Ход <span class="val" id="turn-display">1</span></div>
+    <div class="stat-chip phase">Фаза <span class="val" id="phase-display">Действие</span></div>
+    <div class="stat-chip score">Очки <span class="val" id="score-display">0</span></div>
+  </div>
+</header>
+
+<div class="main">
+  <div id="grid"></div>
+
+  <div class="sidebar">
+    <div class="panel" id="unit-info">
+      <div class="panel-title">Юнит</div>
+      <div class="empty-state">Выберите юнита</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Действия</div>
+      <div class="actions">
+        <button class="btn btn-attack" id="btn-attack" disabled>⚔ Атака</button>
+        <button class="btn btn-skill" id="btn-skill" disabled>✦ Навык</button>
+        <button class="btn btn-end" id="btn-end-turn">⏭ Конец хода</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="log"></div>
+
+<div id="overlay" class="hidden">
+  <h2 id="overlay-title"></h2>
+  <p id="overlay-text"></p>
+  <button class="btn" onclick="initGame()" style="padding:12px 32px; font-size:14px;">Новая игра</button>
+</div>
+
+<script>
+const GRID_SIZE = 8;
+const MOVE_COST = 1;
+const ATTACK_COST = 1;
+const SKILL_COST = 1;
+const UNIT_TYPES = {
+  knight: { name: 'Рыцарь', emoji: '🛡️', hp: 12, maxHp: 12, atk: 4, mp: 3, ap: 2, move: 3, range: 1, skill: 'Щит', skillDesc: '+4 щита', skillCd: 3, skillDmg: 0, skillHeal: 4, skillRange: 0, type: 'melee' },
+  archer: { name: 'Лучник', emoji: '🏹', hp: 7, maxHp: 7, atk: 3, mp: 4, ap: 2, move: 4, range: 3, skill: 'Пронзая стрела', skillDesc: 'Урон 5 по линии', skillCd: 4, skillDmg: 5, skillHeal: 0, skillRange: 5, type: 'ranged' },
+  mage: { name: 'Маг', emoji: '🔮', hp: 6, maxHp: 6, atk: 3, mp: 3, ap: 3, move: 3, range: 2, skill: 'Огненный шар', skillDesc: 'Урон 4 по области', skillCd: 3, skillDmg: 4, skillHeal: 0, skillRange: 2, type: 'aoe' },
+  healer: { name: 'Целитель', emoji: '💚', hp: 5, maxHp: 5, atk: 1, mp: 3, ap: 2, move: 3, range: 1, skill: 'Исцеление', skillDesc: 'Лечение +5', skillCd: 3, skillDmg: 0, skillHeal: 5, skillRange: 2, type: 'heal' },
+  grunt: { name: 'Грунт', emoji: '👹', hp: 6, maxHp: 6, atk: 3, mp: 3, ap: 2, move: 3, range: 1, type: 'melee' },
+  sniper: { name: 'Снайпер', emoji: '🎯', hp: 4, maxHp: 4, atk: 4, mp: 2, ap: 2, move: 2, range: 3, type: 'ranged' },
+  tank: { name: 'Танк', emoji: '🔴', hp: 10, maxHp: 10, atk: 2, mp: 1, ap: 2, move: 1, range: 1, type: 'melee' },
+  swarm: { name: 'Рой', emoji: '🐛', hp: 3, maxHp: 3, atk: 2, mp: 4, ap: 2, move: 4, range: 1, type: 'melee' },
+};
+
+let units = [];
+let selectedUnit = null;
+let currentPhase = 'idle';
+let turn = 1;
+let score = 0;
+let gameOver = false;
+let walls = [];
+let animating = false;
+
+function initGame() {
+  document.getElementById('overlay').classList.add('hidden');
+  units = [];
+  selectedUnit = null;
+  currentPhase = 'idle';
+  turn = 1;
+  score = 0;
+  gameOver = false;
+  animating = false;
+  walls = [];
+
+  const wallPositions = [[2,3],[2,4],[3,3],[4,3],[5,5],[5,6],[6,5],[6,6]];
+  wallPositions.forEach(([r,c]) => walls.push({r, c}));
+
+  const playerUnits = [
+    { type: 'knight', r: 7, c: 2, shield: 0 },
+    { type: 'archer', r: 7, c: 4, shield: 0 },
+    { type: 'mage', r: 6, c: 3, shield: 0 },
+    { type: 'healer', r: 7, c: 5, shield: 0 },
+  ];
+
+  playerUnits.forEach((u, i) => {
+    const t = UNIT_TYPES[u.type];
+    units.push({
+      id: i, ...u,
+      hp: t.hp, maxHp: t.maxHp, atk: t.atk,
+      mp: t.mp, maxMp: t.mp, ap: t.ap, maxAp: t.ap,
+      move: t.move, range: t.range,
+      name: t.name, emoji: t.emoji, isPlayer: true,
+      skillName: t.skill, skillDesc: t.skillDesc,
+      skillDmg: t.skillDmg, skillHeal: t.skillHeal,
+      skillRange: t.skillRange, skillCd: t.skillCd,
+      skillCurrentCd: 0, typeTag: t.type, alive: true,
+    });
+  });
+
+  const enemyUnits = [
+    { type: 'grunt', r: 1, c: 2 },
+    { type: 'grunt', r: 1, c: 5 },
+    { type: 'sniper', r: 0, c: 3 },
+    { type: 'tank', r: 2, c: 4 },
+    { type: 'swarm', r: 3, c: 1 },
+    { type: 'swarm', r: 3, c: 6 },
+  ];
+
+  enemyUnits.forEach((u, i) => {
+    const t = UNIT_TYPES[u.type];
+    units.push({
+      id: playerUnits.length + i, ...u,
+      hp: t.hp, maxHp: t.maxHp, atk: t.atk,
+      mp: t.mp, maxMp: t.mp, ap: t.ap, maxAp: t.ap,
+      move: t.move, range: t.range,
+      name: t.name, emoji: t.emoji, isPlayer: false,
+      alive: true, typeTag: t.type,
+    });
+  });
+
+  buildGrid();
+  updateUI();
+  log('⚔ Бой начался! Уничтожьте всех врагов!', 'system');
+}
+
+function buildGrid() {
+  const gridEl = document.getElementById('grid');
+  gridEl.innerHTML = '';
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.r = r;
+      cell.dataset.c = c;
+      if (isWall(r, c)) cell.classList.add('terrain-wall');
+      cell.addEventListener('click', () => onCellClick(r, c));
+      cell.addEventListener('mouseenter', (e) => showTooltip(e, r, c));
+      cell.addEventListener('mouseleave', hideTooltip);
+      gridEl.appendChild(cell);
+    }
+  }
+  renderUnits();
+}
+
+function isWall(r, c) {
+  return walls.some(w => w.r === r && w.c === c);
+}
+
+function getCell(r, c) {
+  return document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+}
+
+function renderUnits() {
+  document.querySelectorAll('.unit, .intent-arrow, .damage-number').forEach(el => el.remove());
+  const gridEl = document.getElementById('grid');
+
+  units.forEach(u => {
+    if (!u.alive) return;
+    const cell = getCell(u.r, u.c);
+    if (!cell) return;
+
+    const unitEl = document.createElement('div');
+    unitEl.className = `unit ${u.isPlayer ? 'player' : 'enemy'}`;
+    if (selectedUnit && selectedUnit.id === u.id) unitEl.classList.add('selected-unit');
+    unitEl.textContent = u.emoji;
+    unitEl.style.left = (u.c * 63 + 8) + 'px';
+    unitEl.style.top = (u.r * 63 + 8) + 'px';
+
+    // HP bar
+    const hpContainer = document.createElement('div');
+    hpContainer.className = 'hp-bar-container';
+    const hpBar = document.createElement('div');
+    hpBar.className = `hp-bar ${u.isPlayer ? 'player-hp' : 'enemy-hp'}`;
+    hpBar.style.width = Math.max(0, (u.hp / u.maxHp) * 100) + '%';
+    hpContainer.appendChild(hpBar);
+    unitEl.appendChild(hpContainer);
+
+    // Resource dots for player units
+    if (u.isPlayer) {
+      const resEl = document.createElement('div');
+      resEl.className = 'unit-resources';
+      for (let i = 0; i < u.maxMp; i++) {
+        const dot = document.createElement('div');
+        dot.className = `res-dot mp${i >= u.mp ? ' empty' : ''}`;
+        resEl.appendChild(dot);
+      }
+      for (let i = 0; i < u.maxAp; i++) {
+        const dot = document.createElement('div');
+        dot.className = `res-dot ap${i >= u.ap ? ' empty' : ''}`;
+        resEl.appendChild(dot);
+      }
+      unitEl.appendChild(resEl);
+    }
+
+    // Shield badge
+    if (u.shield > 0) {
+      const badge = document.createElement('div');
+      badge.className = 'shield-badge';
+      badge.textContent = `🛡${u.shield}`;
+      unitEl.appendChild(badge);
+    }
+
+    gridEl.appendChild(unitEl);
+
+    if (!u.isPlayer && currentPhase !== 'enemy') {
+      renderEnemyIntent(u);
+    }
+  });
+}
+
+function renderEnemyIntent(u) {
+  const intent = calculateEnemyIntent(u);
+  if (!intent) return;
+  const gridEl = document.getElementById('grid');
+
+  if (intent.moveR !== null && intent.moveC !== null) {
+    const cell = getCell(intent.moveR, intent.moveC);
+    if (cell) cell.classList.add('enemy-intent-move');
+    const arrow = document.createElement('div');
+    arrow.className = 'intent-arrow';
+    const dr = intent.moveR - u.r, dc = intent.moveC - u.c;
+    arrow.textContent = getArrowChar(dr, dc);
+    arrow.style.left = (u.c * 63 + 20) + 'px';
+    arrow.style.top = (u.r * 63 + 18) + 'px';
+    gridEl.appendChild(arrow);
+  }
+
+  if (intent.attackTarget) {
+    const targetCell = getCell(intent.attackTarget.r, intent.attackTarget.c);
+    if (targetCell) targetCell.classList.add('enemy-intent-attack');
+    const fromR = intent.moveR !== null ? intent.moveR : u.r;
+    const fromC = intent.moveC !== null ? intent.moveC : u.c;
+    const arrow = document.createElement('div');
+    arrow.className = 'intent-arrow';
+    arrow.textContent = getArrowChar(intent.attackTarget.r - fromR, intent.attackTarget.c - fromC);
+    arrow.style.left = (fromC * 63 + 20) + 'px';
+    arrow.style.top = (fromR * 63 + 18) + 'px';
+    gridEl.appendChild(arrow);
+  }
+}
+
+function getArrowChar(dr, dc) {
+  if (dr === 0 && dc > 0) return '→';
+  if (dr === 0 && dc < 0) return '←';
+  if (dr < 0 && dc === 0) return '↑';
+  if (dr > 0 && dc === 0) return '↓';
+  if (dr < 0 && dc < 0) return '↖';
+  if (dr < 0 && dc > 0) return '↗';
+  if (dr > 0 && dc < 0) return '↙';
+  if (dr > 0 && dc > 0) return '↘';
+  return '→';
+}
+
+function findClosestPlayer(u) {
+  let best = null, bestDist = Infinity;
+  units.filter(p => p.isPlayer && p.alive).forEach(p => {
+    const d = getManhattanDist(p.r, p.c, u.r, u.c);
+    if (d < bestDist) { bestDist = d; best = p; }
+  });
+  return best;
+}
+
+function findAttackablePlayer(u) {
+  let best = null, bestDist = Infinity;
+  units.filter(p => p.isPlayer && p.alive).forEach(p => {
+    const d = getManhattanDist(p.r, p.c, u.r, u.c);
+    if (d <= u.range && d < bestDist) { bestDist = d; best = p; }
+  });
+  return best;
+}
+
+function findBestMove(u, target) {
+  let bestR = u.r, bestC = u.c, bestDist = getManhattanDist(target.r, target.c, u.r, u.c);
+  const range = Math.min(u.mp, u.move);
+  for (let dr = -range; dr <= range; dr++) {
+    for (let dc = -range; dc <= range; dc++) {
+      if (Math.abs(dr) + Math.abs(dc) > range || (dr === 0 && dc === 0)) continue;
+      const nr = u.r + dr, nc = u.c + dc;
+      if (nr < 0 || nr >= GRID_SIZE || nc < 0 || nc >= GRID_SIZE) continue;
+      if (isWall(nr, nc) || getUnitAt(nr, nc)) continue;
+      const newDist = getManhattanDist(target.r, target.c, nr, nc);
+      if (newDist < bestDist) { bestDist = newDist; bestR = nr; bestC = nc; }
+    }
+  }
+  return (bestR !== u.r || bestC !== u.c) ? { r: bestR, c: bestC } : null;
+}
+
+function calculateEnemyIntent(u) {
+  if (!u.alive) return null;
+  let bestTarget = null, bestDist = Infinity;
+  units.filter(p => p.isPlayer && p.alive).forEach(p => {
+    const d = Math.abs(p.r - u.r) + Math.abs(p.c - u.c);
+    if (d < bestDist) { bestDist = d; bestTarget = p; }
+  });
+  if (!bestTarget) return null;
+
+  const intent = { moveR: null, moveC: null, attackTarget: null };
+  const atkDist = Math.abs(bestTarget.r - u.r) + Math.abs(bestTarget.c - u.c);
+  if (atkDist <= u.range) {
+    intent.attackTarget = { r: bestTarget.r, c: bestTarget.c };
+    return intent;
+  }
+
+  let bestMoveR = u.r, bestMoveC = u.c, bestMoveDist = atkDist;
+  for (let dr = -u.move; dr <= u.move; dr++) {
+    for (let dc = -u.move; dc <= u.move; dc++) {
+      if (Math.abs(dr) + Math.abs(dc) > u.move) continue;
+      const nr = u.r + dr, nc = u.c + dc;
+      if (nr < 0 || nr >= GRID_SIZE || nc < 0 || nc >= GRID_SIZE) continue;
+      if (isWall(nr, nc) || getUnitAt(nr, nc)) continue;
+      const newDist = Math.abs(bestTarget.r - nr) + Math.abs(bestTarget.c - nc);
+      if (newDist < bestMoveDist) { bestMoveDist = newDist; bestMoveR = nr; bestMoveC = nc; }
+    }
+  }
+
+  if (bestMoveR !== u.r || bestMoveC !== u.c) {
+    intent.moveR = bestMoveR;
+    intent.moveC = bestMoveC;
+  }
+  const distAfterMove = Math.abs(bestTarget.r - bestMoveR) + Math.abs(bestTarget.c - bestMoveC);
+  if (distAfterMove <= u.range) {
+    intent.attackTarget = { r: bestTarget.r, c: bestTarget.c };
+  }
+  return intent;
+}
+
+function getUnitAt(r, c) {
+  return units.find(u => u.alive && u.r === r && u.c === c);
+}
+
+function getManhattanDist(r1, c1, r2, c2) {
+  return Math.abs(r1 - r2) + Math.abs(c1 - c2);
+}
+
+function onCellClick(r, c) {
+  if (gameOver || animating || currentPhase === 'enemy') return;
+  const clickedUnit = getUnitAt(r, c);
+
+  if (!selectedUnit) {
+    if (clickedUnit && clickedUnit.isPlayer && (clickedUnit.mp > 0 || clickedUnit.ap > 0)) {
+      selectedUnit = clickedUnit;
+      currentPhase = 'idle';
+      showMoveRange(selectedUnit);
+      updateUI();
+    }
+    return;
+  }
+
+  if (clickedUnit && clickedUnit.id === selectedUnit.id) {
+    clearHighlights();
+    selectedUnit = null;
+    currentPhase = 'idle';
+    updateUI();
+    return;
+  }
+
+  if (clickedUnit && clickedUnit.isPlayer && (clickedUnit.mp > 0 || clickedUnit.ap > 0)) {
+    selectedUnit = clickedUnit;
+    currentPhase = 'idle';
+    showMoveRange(selectedUnit);
+    updateUI();
+    return;
+  }
+
+  if (!selectedUnit) return;
+
+  if (currentPhase === 'attack') {
+    if (clickedUnit && !clickedUnit.isPlayer && clickedUnit.alive) {
+      const dist = getManhattanDist(selectedUnit.r, selectedUnit.c, clickedUnit.r, clickedUnit.c);
+      if (dist <= selectedUnit.range && selectedUnit.ap >= ATTACK_COST) {
+        selectedUnit.ap -= ATTACK_COST;
+        performAttack(selectedUnit, clickedUnit);
+        log(`${selectedUnit.emoji} ${selectedUnit.name} → ${clickedUnit.emoji} ${clickedUnit.name} за ${selectedUnit.atk} урона`, 'player');
+        clearHighlights();
+        afterAction();
+      }
+    } else {
+      clearHighlights();
+      selectedUnit = null;
+      currentPhase = 'idle';
+      updateUI();
+    }
+    return;
+  }
+
+  if (currentPhase === 'skill') {
+    if (selectedUnit.ap >= SKILL_COST) {
+      selectedUnit.ap -= SKILL_COST;
+      performSkill(selectedUnit, r, c);
+      selectedUnit.skillCurrentCd = selectedUnit.skillCd;
+      clearHighlights();
+      afterAction();
+    }
+    return;
+  }
+
+  if (currentPhase === 'move') {
+    const dist = getManhattanDist(selectedUnit.r, selectedUnit.c, r, c);
+    const mpCost = Math.min(dist, selectedUnit.mp);
+    if (mpCost > 0 && dist <= selectedUnit.mp && !isWall(r, c) && !getUnitAt(r, c)) {
+      selectedUnit.r = r;
+      selectedUnit.c = c;
+      selectedUnit.mp -= mpCost;
+      log(`${selectedUnit.emoji} ${selectedUnit.name} → [${r},${c}] (-${mpCost}⚡)`, 'player');
+      clearHighlights();
+      afterAction();
+    }
+    return;
+  }
+
+  if (currentPhase === 'idle') {
+    const dist = getManhattanDist(selectedUnit.r, selectedUnit.c, r, c);
+    if (dist > 0 && dist <= selectedUnit.mp && selectedUnit.mp > 0 && !isWall(r, c) && !getUnitAt(r, c)) {
+      selectedUnit.r = r;
+      selectedUnit.c = c;
+      selectedUnit.mp -= dist;
+      log(`${selectedUnit.emoji} ${selectedUnit.name} → [${r},${c}] (-${dist}⚡)`, 'player');
+      clearHighlights();
+      afterAction();
+    } else if (!clickedUnit) {
+      clearHighlights();
+      selectedUnit = null;
+      updateUI();
+    }
+    return;
+  }
+}
+
+function afterAction() {
+  if (!selectedUnit || !selectedUnit.alive) {
+    selectedUnit = null;
+    currentPhase = 'idle';
+    updateUI();
+    checkWinCondition();
+    return;
+  }
+  if (selectedUnit.mp > 0) {
+    showMoveRange(selectedUnit);
+  } else if (selectedUnit.ap > 0) {
+    const enemiesInRange = units.filter(u => !u.isPlayer && u.alive &&
+      getManhattanDist(selectedUnit.r, selectedUnit.c, u.r, u.c) <= selectedUnit.range);
+    if (enemiesInRange.length > 0) showAttackRange(selectedUnit);
+  }
+  updateUI();
+  checkWinCondition();
+}
+
+function showMoveRange(unit) {
+  clearHighlights();
+  const range = Math.min(unit.mp, unit.move);
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const dist = getManhattanDist(unit.r, unit.c, r, c);
+      if (dist <= range && dist > 0 && !isWall(r, c) && !getUnitAt(r, c)) {
+        const cell = getCell(r, c);
+        if (cell) cell.classList.add('move-range');
+      }
+    }
+  }
+  const cell = getCell(unit.r, unit.c);
+  if (cell) cell.classList.add('selected');
+}
+
+function showAttackRange(unit) {
+  clearHighlights();
+  units.filter(u => !u.isPlayer && u.alive).forEach(target => {
+    const dist = getManhattanDist(unit.r, unit.c, target.r, target.c);
+    if (dist <= unit.range) {
+      const cell = getCell(target.r, target.c);
+      if (cell) cell.classList.add('attack-range');
+    }
+  });
+  const cell = getCell(unit.r, unit.c);
+  if (cell) cell.classList.add('selected');
+}
+
+function showSkillRange(unit) {
+  clearHighlights();
+  const range = unit.skillRange;
+  if (unit.typeTag === 'aoe') {
+    for (let r = Math.max(0, unit.r - range); r <= Math.min(GRID_SIZE-1, unit.r + range); r++) {
+      for (let c = Math.max(0, unit.c - range); c <= Math.min(GRID_SIZE-1, unit.c + range); c++) {
+        if (getManhattanDist(unit.r, unit.c, r, c) <= range) {
+          const cell = getCell(r, c);
+          if (cell) cell.classList.add('skill-range');
+        }
+      }
+    }
+  } else if (unit.typeTag === 'heal') {
+    units.filter(u => u.isPlayer && u.alive).forEach(target => {
+      const dist = getManhattanDist(unit.r, unit.c, target.r, target.c);
+      if (dist <= range) {
+        const cell = getCell(target.r, target.c);
+        if (cell) cell.classList.add('skill-range');
+      }
+    });
+  } else {
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        if (getManhattanDist(unit.r, unit.c, r, c) <= range) {
+          const cell = getCell(r, c);
+          if (cell) cell.classList.add('skill-range');
+        }
+      }
+    }
+  }
+  const cell = getCell(unit.r, unit.c);
+  if (cell) cell.classList.add('selected');
+}
+
+function clearHighlights() {
+  document.querySelectorAll('.cell').forEach(cell => {
+    cell.classList.remove('move-range', 'attack-range', 'skill-range', 'selected', 'enemy-intent-move', 'enemy-intent-attack');
+  });
+}
+
+function performAttack(attacker, target) {
+  const dmg = attacker.atk;
+  applyDamage(target, dmg);
+  showDamageNumber(target.r, target.c, dmg);
+  if (target.alive && attacker.typeTag !== 'aoe') {
+    const pushR = target.r + Math.sign(target.r - attacker.r);
+    const pushC = target.c + Math.sign(target.c - attacker.c);
+    if (pushR >= 0 && pushR < GRID_SIZE && pushC >= 0 && pushC < GRID_SIZE && !isWall(pushR, pushC) && !getUnitAt(pushR, pushC)) {
+      target.r = pushR;
+      target.c = pushC;
+      log(`${target.emoji} ${target.name} отброшен на [${pushR},${pushC}]`, 'system');
+    }
+  }
+  if (!target.alive) {
+    score += 100;
+    log(`💀 ${target.name} уничтожен!`, 'system');
+  }
+}
+
+function performSkill(unit, r, c) {
+  if (unit.typeTag === 'aoe') {
+    units.filter(u => !u.isPlayer && u.alive).forEach(target => {
+      const dist = getManhattanDist(unit.r, unit.c, target.r, target.c);
+      if (dist <= unit.skillRange) {
+        applyDamage(target, unit.skillDmg);
+        showDamageNumber(target.r, target.c, unit.skillDmg);
+        if (!target.alive) { score += 100; log(`💀 ${target.name} уничтожен!`, 'system'); }
+      }
+    });
+    log(`${unit.emoji} ${unit.name} → ${unit.skillName}!`, 'player');
+  } else if (unit.typeTag === 'heal') {
+    const target = getUnitAt(r, c);
+    if (target && target.isPlayer && target.alive) {
+      const dist = getManhattanDist(unit.r, unit.c, target.r, target.c);
+      if (dist <= unit.skillRange) {
+        const healAmount = unit.skillHeal;
+        target.hp = Math.min(target.maxHp, target.hp + healAmount);
+        showDamageNumber(target.r, target.c, healAmount, true);
+        log(`${unit.emoji} ${unit.name} → ${target.emoji} +${healAmount} HP`, 'heal');
+      }
+    }
+  } else if (unit.skillDmg > 0) {
+    const target = getUnitAt(r, c);
+    if (target && !target.isPlayer && target.alive) {
+      const dist = getManhattanDist(unit.r, unit.c, target.r, target.c);
+      if (dist <= unit.skillRange) {
+        applyDamage(target, unit.skillDmg);
+        showDamageNumber(target.r, target.c, unit.skillDmg);
+        if (!target.alive) { score += 100; log(`💀 ${target.name} уничтожен!`, 'system'); }
+      }
+    }
+  } else if (unit.skillHeal > 0 && unit.typeTag !== 'heal') {
+    const shieldAmt = unit.skillHeal;
+    unit.shield = (unit.shield || 0) + shieldAmt;
+    showDamageNumber(unit.r, unit.c, shieldAmt, true);
+    log(`${unit.emoji} ${unit.name} → +${shieldAmt} 🛡`, 'heal');
+  }
+}
+
+function applyDamage(target, dmg) {
+  if (target.shield > 0) {
+    const shieldDmg = Math.min(target.shield, dmg);
+    target.shield -= shieldDmg;
+    dmg -= shieldDmg;
+  }
+  target.hp -= dmg;
+  if (target.hp <= 0) { target.hp = 0; target.alive = false; }
+}
+
+function showDamageNumber(r, c, amount, isHeal = false) {
+  const gridEl = document.getElementById('grid');
+  const num = document.createElement('div');
+  num.className = `damage-number ${isHeal ? 'heal' : ''}`;
+  num.textContent = isHeal ? `+${amount}` : `-${amount}`;
+  num.style.left = (c * 63 + 16) + 'px';
+  num.style.top = (r * 63 + 4) + 'px';
+  gridEl.appendChild(num);
+  setTimeout(() => num.remove(), 1200);
+  const cell = getCell(r, c);
+  if (cell) {
+    cell.classList.add(isHeal ? 'heal-flash' : 'damage-flash');
+    setTimeout(() => cell.classList.remove('heal-flash', 'damage-flash'), 500);
+  }
+}
+
+async function endPlayerTurn() {
+  if (animating) return;
+  animating = true;
+  clearHighlights();
+  selectedUnit = null;
+  currentPhase = 'enemy';
+  updateUI();
+  log(`── Ход врагов ──`, 'system');
+
+  const enemies = units.filter(u => !u.isPlayer && u.alive);
+  for (const enemy of enemies) {
+    if (!enemy.alive) continue;
+    if (enemy.mp > 0) {
+      const target = findClosestPlayer(enemy);
+      if (target) {
+        const origR = enemy.r, origC = enemy.c;
+        const moveTarget = findBestMove(enemy, target);
+        if (moveTarget) {
+          const moveCost = getManhattanDist(origR, origC, moveTarget.r, moveTarget.c);
+          enemy.r = moveTarget.r;
+          enemy.c = moveTarget.c;
+          enemy.mp -= moveCost;
+          renderUnits();
+          await sleep(300);
+          log(`${enemy.emoji} ${enemy.name} → [${enemy.r},${enemy.c}]`, 'enemy');
+        }
+      }
+    }
+    while (enemy.ap >= ATTACK_COST) {
+      const target = findAttackablePlayer(enemy);
+      if (!target) break;
+      applyDamage(target, enemy.atk);
+      showDamageNumber(target.r, target.c, enemy.atk);
+      enemy.ap -= ATTACK_COST;
+      log(`${enemy.emoji} ${enemy.name} → ${target.emoji} ${target.name} за ${enemy.atk}`, 'enemy');
+      renderUnits();
+      if (!target.alive) log(`💀 ${target.name} уничтожен!`, 'enemy');
+      if (checkWinCondition()) { animating = false; return; }
+    }
+    await sleep(400);
+    renderUnits();
+  }
+
+  if (checkWinCondition()) { animating = false; return; }
+
+  turn++;
+  currentPhase = 'idle';
+  units.filter(u => u.isPlayer && u.alive).forEach(u => {
+    u.mp = u.maxMp;
+    u.ap = u.maxAp;
+    if (u.skillCurrentCd > 0) u.skillCurrentCd--;
+  });
+  if (turn % 3 === 0) spawnReinforcements();
+  animating = false;
+  updateUI();
+  log(`── Ход ${turn} ──`, 'system');
+}
+
+function spawnReinforcements() {
+  const enemyCount = units.filter(u => !u.isPlayer && u.alive).length;
+  if (enemyCount >= 8) return;
+  const types = ['grunt', 'swarm', 'sniper'];
+  const type = types[Math.floor(Math.random() * types.length)];
+  const t = UNIT_TYPES[type];
+  let attempts = 0;
+  while (attempts < 20) {
+    const r = Math.floor(Math.random() * 2);
+    const c = Math.floor(Math.random() * GRID_SIZE);
+    if (!getUnitAt(r, c) && !isWall(r, c)) {
+      units.push({
+        id: units.length, type, r, c,
+        hp: t.hp, maxHp: t.maxHp, atk: t.atk,
+        mp: t.mp, maxMp: t.mp, ap: t.ap, maxAp: t.ap,
+        move: t.move, range: t.range,
+        name: t.name, emoji: t.emoji,
+        isPlayer: false, alive: true, typeTag: t.type,
+      });
+      log(`⚠ Подкрепление: ${t.emoji} ${t.name}!`, 'enemy');
+      renderUnits();
+      break;
+    }
+    attempts++;
+  }
+}
+
+function checkWinCondition() {
+  const playersAlive = units.filter(u => u.isPlayer && u.alive);
+  const enemiesAlive = units.filter(u => !u.isPlayer && u.alive);
+  if (enemiesAlive.length === 0) {
+    gameOver = true;
+    score += turn * 50;
+    showOverlay('ПОБЕДА!', `Все враги уничтожены! Очки: ${score}`, 'win');
+    return true;
+  }
+  if (playersAlive.length === 0) {
+    gameOver = true;
+    showOverlay('ПОРАЖЕНИЕ', 'Все юниты уничтожены!', 'lose');
+    return true;
+  }
+  return false;
+}
+
+function showOverlay(title, text, type) {
+  const overlay = document.getElementById('overlay');
+  document.getElementById('overlay-title').textContent = title;
+  document.getElementById('overlay-title').className = type;
+  document.getElementById('overlay-text').textContent = text;
+  overlay.classList.remove('hidden');
+}
+
+function updateUI() {
+  document.getElementById('turn-display').textContent = turn;
+  document.getElementById('score-display').textContent = score;
+  const phaseNames = { idle: 'Действие', move: 'Движение', attack: 'Атака', skill: 'Навык', enemy: 'Враги' };
+  document.getElementById('phase-display').textContent = phaseNames[currentPhase] || '';
+
+  const btnAttack = document.getElementById('btn-attack');
+  const btnSkill = document.getElementById('btn-skill');
+  btnAttack.disabled = !selectedUnit || selectedUnit.ap < ATTACK_COST || currentPhase === 'enemy';
+  btnSkill.disabled = !selectedUnit || selectedUnit.ap < SKILL_COST || selectedUnit.skillCurrentCd > 0 || currentPhase === 'enemy';
+  btnSkill.textContent = selectedUnit && selectedUnit.skillCurrentCd > 0
+    ? `✦ Навык (${selectedUnit.skillCurrentCd})` : '✦ Навык';
+
+  const infoPanel = document.getElementById('unit-info');
+  if (selectedUnit) {
+    const u = selectedUnit;
+    const hpPct = Math.max(0, (u.hp / u.maxHp) * 100);
+    const mpPct = Math.max(0, (u.mp / u.maxMp) * 100);
+    const apPct = Math.max(0, (u.ap / u.maxAp) * 100);
+    infoPanel.innerHTML = `
+      <div class="panel-title">Юнит</div>
+      <div class="unit-name ${u.isPlayer ? '' : 'enemy-name'}">${u.emoji} ${u.name}</div>
+      <div class="info-row"><span class="info-label">❤️ HP</span><span class="info-value hp">${u.hp}/${u.maxHp}</span></div>
+      <div class="resource-bar"><div class="resource-bar-fill hp" style="width:${hpPct}%"></div></div>
+      ${u.shield > 0 ? `<div class="info-row"><span class="info-label">🛡️ Щит</span><span class="info-value" style="color:var(--blue)">${u.shield}</span></div>` : ''}
+      ${u.isPlayer ? `
+        <div class="info-row"><span class="info-label">⚡ MP</span><span class="info-value mp">${u.mp}/${u.maxMp}</span></div>
+        <div class="resource-bar"><div class="resource-bar-fill mp" style="width:${mpPct}%"></div></div>
+        <div class="info-row"><span class="info-label">⚔ AP</span><span class="info-value ap">${u.ap}/${u.maxAp}</span></div>
+        <div class="resource-bar"><div class="resource-bar-fill ap" style="width:${apPct}%"></div></div>
+      ` : ''}
+      <div class="info-row"><span class="info-label">⚔️ Атака</span><span class="info-value atk">${u.atk}</span></div>
+      <div class="info-row"><span class="info-label">🎯 Дальность</span><span class="info-value">${u.range}</span></div>
+      <div class="info-row"><span class="info-label">📍 Позиция</span><span class="info-value">[${u.r}, ${u.c}]</span></div>
+      ${u.isPlayer ? `<div class="info-row"><span class="info-label">✦ ${u.skillName}</span><span class="info-value">${u.skillDesc} ${u.skillCurrentCd > 0 ? `(КД:${u.skillCurrentCd})` : '(✓)'}</span></div>` : ''}
+    `;
+  } else {
+    infoPanel.innerHTML = '<div class="panel-title">Юнит</div><div class="empty-state">Выберите юнита</div>';
+  }
+  renderUnits();
+}
+
+function log(message, type = '') {
+  const logEl = document.getElementById('log');
+  const div = document.createElement('div');
+  div.className = `log-${type}`;
+  div.textContent = message;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function showTooltip(e, r, c) {
+  const existing = document.querySelector('.tooltip');
+  if (existing) existing.remove();
+  const unit = getUnitAt(r, c);
+  if (!unit) {
+    if (isWall(r, c)) {
+      const tt = document.createElement('div');
+      tt.className = 'tooltip';
+      tt.textContent = '🧱 Стена';
+      tt.style.left = (e.clientX + 10) + 'px';
+      tt.style.top = (e.clientY + 10) + 'px';
+      document.body.appendChild(tt);
+    }
+    return;
+  }
+  const tt = document.createElement('div');
+  tt.className = 'tooltip';
+  tt.innerHTML = `<strong>${unit.emoji} ${unit.name}</strong> | HP: ${unit.hp}/${unit.maxHp} | ATK: ${unit.atk}`;
+  tt.style.left = (e.clientX + 10) + 'px';
+  tt.style.top = (e.clientY + 10) + 'px';
+  document.body.appendChild(tt);
+}
+
+function hideTooltip() {
+  const existing = document.querySelector('.tooltip');
+  if (existing) existing.remove();
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+document.getElementById('btn-attack').addEventListener('click', () => {
+  if (selectedUnit && selectedUnit.ap >= ATTACK_COST) {
+    currentPhase = 'attack';
+    showAttackRange(selectedUnit);
+    updateUI();
+  }
+});
+
+document.getElementById('btn-skill').addEventListener('click', () => {
+  if (selectedUnit && selectedUnit.ap >= SKILL_COST && selectedUnit.skillCurrentCd <= 0) {
+    currentPhase = 'skill';
+    showSkillRange(selectedUnit);
+    updateUI();
+  }
+});
+
+document.getElementById('btn-end-turn').addEventListener('click', endPlayerTurn);
+
+initGame();
+</script>
+</body>
+</html>
